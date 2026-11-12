@@ -163,8 +163,8 @@ body {
 }
 
 .claim-item.supported { border-left-color: #10b981; }
-.claim-item.contradicted { border-left-color: #ef4444; }
-.claim-item.unsupported { border-left-color: #f59e0b; }
+.claim-item.refuted { border-left-color: #ef4444; }
+.claim-item.nei { border-left-color: #f59e0b; }
 
 .claim-header {
   display: flex;
@@ -178,6 +178,16 @@ body {
   font-weight: 500;
 }
 
+.source-tag {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
 .badge {
   padding: 4px 12px;
   border-radius: 999px;
@@ -188,8 +198,8 @@ body {
 }
 
 .badge.supported { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.badge.contradicted { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-.badge.unsupported { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.badge.refuted { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.badge.nei { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 
 .evidence-box {
   margin-top: 12px;

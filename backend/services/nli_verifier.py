@@ -1,7 +1,15 @@
 from transformers import pipeline
 import warnings
+from typing import Optional, Tuple
 
-from models import NO_EVIDENCE_MESSAGE
+from models import (
+    NO_EVIDENCE_MESSAGE,
+    NLIProbabilities,
+    VERDICT_SOURCE_MODEL_UNAVAILABLE,
+    VERDICT_SOURCE_NLI_MODEL,
+    VERDICT_SOURCE_NO_EVIDENCE,
+    VERDICT_SOURCE_PINNED_DEMO,
+)
 from services.demo_examples import demo_verdict
 
 # Suppress warnings
@@ -18,48 +26,55 @@ class NLIVerifier:
             print(f"Could not load NLI model, falling back to mock. Error: {e}")
             self.model_loaded = False
 
-    def verify(self, claim: str, evidence: str) -> str:
+    def verify(self, claim: str, evidence: str) -> Tuple[str, Optional[NLIProbabilities], str]:
         """
         Verifies a claim against evidence.
-        Returns 'Supported', 'Contradicted', or 'Unsupported'.
+        Returns (verdict, probabilities, source), where verdict is 'Supported',
+        'Refuted', or 'Not Enough Information'; probabilities holds the model's
+        three class probabilities (report §4.1 Stage 4) -- None when the model was
+        not run; and source says where the verdict came from (models.VERDICT_SOURCE_*).
         """
         # --- DEMO FIXTURES ---
         # Recognised demo claims get a pinned verdict so the mid-term demo is
         # deterministic and not at the mercy of the small NLI model.
         forced = demo_verdict(claim)
         if forced:
-            return forced
+            return forced, None, VERDICT_SOURCE_PINNED_DEMO
 
 
-        # No evidence retrieved for this claim -> cannot verify -> Unsupported.
-        # (Never Contradicted: absence of evidence is not proof the claim is false.)
+        # No evidence retrieved for this claim -> cannot verify -> Not Enough Information.
+        # (Never Refuted: absence of evidence is not proof the claim is false.)
         if (not evidence
                 or evidence.strip() == NO_EVIDENCE_MESSAGE
                 or "No evidence found" in evidence
                 or "No relevant evidence" in evidence):
-            return "Unsupported"
-            
+            return "Not Enough Information", None, VERDICT_SOURCE_NO_EVIDENCE
+
         # --- REAL VERIFICATION ---
         if self.model_loaded:
-            # The cross-encoder expects input as {"text": premise, "text_pair": hypothesis}
-            # Actually, standard pipelines take a string "Premise [SEP] Hypothesis" or a tuple
             try:
-                # Format for cross-encoder/nli-deberta-v3-small
-                result = self.classifier({"text": evidence, "text_pair": claim})
-                label = result['label'].lower()
-                
-                # Label mapping for cross-encoder/nli-deberta-v3-small:
-                # LABEL_0: contradiction, LABEL_1: entailment, LABEL_2: neutral
-                if label == "label_1" or "entailment" in label:
-                    return "Supported"
-                elif label == "label_0" or "contradiction" in label:
-                    return "Contradicted"
-                else:
-                    return "Unsupported"
+                # Premise = evidence, hypothesis = claim. top_k=None returns the
+                # score of every class instead of only the top label.
+                scores = self.classifier({"text": evidence, "text_pair": claim}, top_k=None)
+                by_label = {s["label"].lower(): s["score"] for s in scores}
+                probabilities = NLIProbabilities(
+                    entailment=by_label["entailment"],
+                    contradiction=by_label["contradiction"],
+                    neutral=by_label["neutral"],
+                )
+
+                # Verdict is still the most probable class; the thresholded
+                # aggregation rule from §4.1 replaces this in Phase 2.
+                top = max(by_label, key=by_label.get)
+                verdict = {
+                    "entailment": "Supported",
+                    "contradiction": "Refuted",
+                }.get(top, "Not Enough Information")
+                return verdict, probabilities, VERDICT_SOURCE_NLI_MODEL
             except Exception as e:
                 print(f"Error during NLI: {e}")
-                
+
         # Simple heuristic fallback if model fails
-        return "Unsupported"
+        return "Not Enough Information", None, VERDICT_SOURCE_MODEL_UNAVAILABLE
 
 verifier = NLIVerifier()

@@ -43,8 +43,8 @@ def verify_answer(request: VerificationRequest):
     
     verified_claims = []
     supported_count = 0
-    contradicted_count = 0
-    unsupported_count = 0
+    refuted_count = 0
+    nei_count = 0
     
     # 2. For each claim, retrieve evidence and verify
     for claim in claims:
@@ -52,20 +52,22 @@ def verify_answer(request: VerificationRequest):
         evidence = retriever.retrieve(claim.text, top_k=2)
         
         # Verify claim
-        verdict = verifier.verify(claim.text, evidence)
+        verdict, probabilities, source = verifier.verify(claim.text, evidence)
         
         if verdict == "Supported":
             supported_count += 1
-        elif verdict == "Contradicted":
-            contradicted_count += 1
+        elif verdict == "Refuted":
+            refuted_count += 1
         else:
-            unsupported_count += 1
+            nei_count += 1
             
         verified_claims.append(VerificationResult(
             claim_id=claim.id,
             claim_text=claim.text,
             verdict=verdict,
-            evidence=evidence
+            evidence=evidence,
+            nli_probabilities=probabilities,
+            verdict_source=source
         ))
         
     total_claims = len(claims)
@@ -73,7 +75,7 @@ def verify_answer(request: VerificationRequest):
     # 3. Calculate Scores
     if total_claims > 0:
         faithfulness_score = (supported_count / total_claims) * 100
-        hallucination_score = ((contradicted_count + unsupported_count) / total_claims) * 100
+        hallucination_score = ((refuted_count + nei_count) / total_claims) * 100
     else:
         faithfulness_score = 0.0
         hallucination_score = 0.0
@@ -81,15 +83,15 @@ def verify_answer(request: VerificationRequest):
     # 4. Final Classification
     if faithfulness_score == 100:
         overall_class = "Supported"
-    elif contradicted_count > 0:
+    elif refuted_count > 0:
         if supported_count > 0:
-            overall_class = "Partially Supported / Has Contradictions"
+            overall_class = "Partially Supported / Has Refutations"
         else:
-            overall_class = "Contradicted"
-    elif unsupported_count > 0 and supported_count > 0:
+            overall_class = "Refuted"
+    elif nei_count > 0 and supported_count > 0:
         overall_class = "Partially Supported"
-    elif unsupported_count == total_claims and total_claims > 0:
-        overall_class = "Unsupported"
+    elif nei_count == total_claims and total_claims > 0:
+        overall_class = "Not Enough Information"
     else:
         overall_class = "Unknown"
 

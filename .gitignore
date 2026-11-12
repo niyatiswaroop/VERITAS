@@ -4,3 +4,5 @@ backend/venv/
 *.pyc
 .env
 .DS_Store
+
+research/

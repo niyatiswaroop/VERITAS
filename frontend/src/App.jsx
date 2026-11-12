@@ -3,6 +3,21 @@ import axios from 'axios';
 import { ShieldCheck, Loader2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import './index.css';
 
+// CSS class per verdict label ("Not Enough Information" has spaces, so it can't be used directly).
+const VERDICT_CLASS = {
+  'Supported': 'supported',
+  'Refuted': 'refuted',
+  'Not Enough Information': 'nei',
+};
+
+// Tag shown when a verdict did not come from the NLI model (report §5.1: pinned
+// demo verdicts must not be read as model output).
+const VERDICT_SOURCE_TAG = {
+  pinned_demo: 'Pinned demo verdict, model not run',
+  no_evidence: 'No evidence retrieved',
+  model_unavailable: 'NLI model unavailable, model not run',
+};
+
 function App() {
   const [answer, setAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +86,7 @@ function App() {
                   onClick={() => setAnswer(ex.text)}
                   style={{ background: 'transparent', border: '1px solid #475569', color: '#cbd5e1', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
                 >
-                  {ex.label}
+                  {ex.label} (demo)
                 </button>
               ))}
             </div>
@@ -109,7 +124,7 @@ function App() {
               <div className={`score-value ${results.hallucination_score <= 20 ? 'high' : results.hallucination_score <= 50 ? 'medium' : 'low'}`}>
                 {results.hallucination_score}%
               </div>
-              <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>Contradicted + Unsupported</p>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>Refuted + Not Enough Information</p>
             </div>
           </div>
 
@@ -117,15 +132,20 @@ function App() {
             <h2 style={{ borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' }}>Claim-Level Breakdown</h2>
             <div className="claims-list">
               {results.claims_verified.map((claim, idx) => (
-                <div key={idx} className={`glass-panel claim-item ${claim.verdict.toLowerCase()}`}>
+                <div key={idx} className={`glass-panel claim-item ${VERDICT_CLASS[claim.verdict]}`}>
                   <div className="claim-header">
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                       {claim.verdict === 'Supported' && <CheckCircle2 color="#10b981" style={{ marginTop: '2px' }} />}
-                      {claim.verdict === 'Contradicted' && <XCircle color="#ef4444" style={{ marginTop: '2px' }} />}
-                      {claim.verdict === 'Unsupported' && <AlertTriangle color="#f59e0b" style={{ marginTop: '2px' }} />}
-                      <div className="claim-text">{claim.claim_text}</div>
+                      {claim.verdict === 'Refuted' && <XCircle color="#ef4444" style={{ marginTop: '2px' }} />}
+                      {claim.verdict === 'Not Enough Information' && <AlertTriangle color="#f59e0b" style={{ marginTop: '2px' }} />}
+                      <div>
+                        <div className="claim-text">{claim.claim_text}</div>
+                        {VERDICT_SOURCE_TAG[claim.verdict_source] && (
+                          <div className="source-tag">{VERDICT_SOURCE_TAG[claim.verdict_source]}</div>
+                        )}
+                      </div>
                     </div>
-                    <div className={`badge ${claim.verdict.toLowerCase()}`}>
+                    <div className={`badge ${VERDICT_CLASS[claim.verdict]}`}>
                       {claim.verdict}
                     </div>
                   </div>
@@ -135,6 +155,11 @@ function App() {
                     <div className="evidence-box">
                       {claim.evidence || "No relevant evidence found in the knowledge base."}
                     </div>
+                    {claim.nli_probabilities && (
+                      <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                        NLI: Entailment {claim.nli_probabilities.entailment.toFixed(3)} · Contradiction {claim.nli_probabilities.contradiction.toFixed(3)} · Neutral {claim.nli_probabilities.neutral.toFixed(3)}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

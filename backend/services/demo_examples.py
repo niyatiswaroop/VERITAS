@@ -27,7 +27,7 @@ DEMO_EXAMPLES = [
         "claims": [
             ("The Eiffel Tower was designed by Gustave Eiffel.", "Supported"),
             ("The Eiffel Tower was completed in 1889.", "Supported"),
-            ("The Eiffel Tower is located in London.", "Contradicted"),
+            ("The Eiffel Tower is located in London.", "Refuted"),
         ],
     },
     {
@@ -58,8 +58,8 @@ DEMO_EXAMPLES = [
             ("The Statue of Liberty stands on Liberty Island in New York Harbor.", "Supported"),
             ("The Statue of Liberty was a gift from the people of France.", "Supported"),
             ("The Statue of Liberty was dedicated in 1886.", "Supported"),
-            ("The Statue of Liberty is made of solid gold.", "Contradicted"),
-            ("The Statue of Liberty is the most visited monument in the United States.", "Unsupported"),
+            ("The Statue of Liberty is made of solid gold.", "Refuted"),
+            ("The Statue of Liberty is the most visited monument in the United States.", "Not Enough Information"),
         ],
     },
 ]

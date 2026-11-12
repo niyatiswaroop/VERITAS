@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 from models import NO_EVIDENCE_MESSAGE
 
 # Max L2 distance for a chunk to count as relevant evidence. Chunks farther than
-# this are treated as "not about the claim" so the claim is reported Unsupported
+# this are treated as "not about the claim" so the claim is reported Not Enough Information
 # rather than being force-matched to whatever is closest in the knowledge base.
 # Calibrated on the current KB: real matches land ~0.4-0.5, off-topic queries ~1.6+.
 MAX_EVIDENCE_DISTANCE = 1.0
@@ -87,7 +87,7 @@ class EvidenceRetriever:
 
         Returns NO_EVIDENCE_MESSAGE when the knowledge base has nothing close
         enough to the query, so a claim with no coverage is reported as
-        Unsupported instead of being matched to an unrelated chunk.
+        Not Enough Information instead of being matched to an unrelated chunk.
         """
         if not self.has_documents:
             return NO_EVIDENCE_MESSAGE
