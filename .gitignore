@@ -6,3 +6,7 @@ backend/venv/
 .DS_Store
 
 research/
+
+# FEVER raw downloads and the knowledge base built from them (large, regenerable)
+backend/data/fever/
+backend/data/fever_kb/

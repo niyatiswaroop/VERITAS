@@ -1,17 +1,31 @@
 import os
+from typing import List
+
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-from models import NO_EVIDENCE_MESSAGE
+from models import EvidenceSpan
 
-# Max L2 distance for a chunk to count as relevant evidence. Chunks farther than
-# this are treated as "not about the claim" so the claim is reported Not Enough Information
-# rather than being force-matched to whatever is closest in the knowledge base.
-# Calibrated on the current KB: real matches land ~0.4-0.5, off-topic queries ~1.6+.
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Persistent FEVER knowledge base built by scripts/build_fever_kb.py (Phase 2, item 2.1).
+FEVER_KB_DIR = os.path.join(BACKEND_DIR, "data", "fever_kb", "chroma")
+FEVER_COLLECTION = "fever_kb"
+# Fallback knowledge base: the prototype's text files, used only when no FEVER KB has been built.
+FALLBACK_DATA_DIR = os.path.join(BACKEND_DIR, "data")
+
+# Sentences retrieved per claim. FEVER's baseline also keeps the top 5 sentences (l = 5, §5.6).
+DEFAULT_TOP_K = 5
+
+# Max distance (Chroma's default squared L2 on MiniLM's unit-length embeddings) for a
+# sentence to count as relevant evidence. Farther sentences are treated as "not about the
+# claim", so the claim is reported Not Enough Information rather than being force-matched
+# to whatever is closest. Calibrated on the prototype's text files; to be recalibrated on
+# FEVER using scripts/eval_retrieval.py.
 MAX_EVIDENCE_DISTANCE = 1.0
 
-# Custom chunking function
+
 def split_into_chunks(text, chunk_size=500, overlap=50):
+    """Fixed-size character chunks, only used by the fallback text-file knowledge base."""
     chunks = []
     start = 0
     while start < len(text):
@@ -22,93 +36,70 @@ def split_into_chunks(text, chunk_size=500, overlap=50):
         start = end - overlap
     return chunks
 
+
 class EvidenceRetriever:
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        
-        # Initialize models just like in the internship
+    def __init__(self):
         self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        self.client = chromadb.Client()
-        
-        # Get or create collection
-        try:
-            self.client.delete_collection("veritas_knowledge_base")
-        except:
-            pass
-        self.collection = self.client.get_or_create_collection("veritas_knowledge_base")
-        
-        self.has_documents = False
-        self._load_and_index_documents()
-
-    def _load_and_index_documents(self):
-        """Loads documents from the data directory, chunks them, and adds to ChromaDB."""
-        current_dir = os.path.dirname(os.path.dirname(__file__))
-        data_path = os.path.join(current_dir, self.data_dir)
-        
-        if not os.path.exists(data_path):
-            os.makedirs(data_path)
-            
-        chunks = []
-        ids = []
-        embeddings = []
-        
-        doc_id = 0
-        for filename in os.listdir(data_path):
-            if filename.endswith(".txt"):
-                file_path = os.path.join(data_path, filename)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    text = f.read()
-                    
-                    # Use the internship chunking logic
-                    file_chunks = split_into_chunks(text, chunk_size=200, overlap=20) # Slightly smaller chunk size for claims
-                    
-                    for chunk in file_chunks:
-                        embedding = self.embedder.encode(chunk).tolist()
-                        chunks.append(chunk)
-                        embeddings.append(embedding)
-                        ids.append(f"chunk_{doc_id}")
-                        doc_id += 1
-                            
-        if chunks:
-            # Add to ChromaDB exactly like the internship
-            self.collection.add(
-                documents=chunks,
-                embeddings=embeddings,
-                ids=ids
-            )
-            self.has_documents = True
-            print(f"Loaded {len(chunks)} chunks into ChromaDB.")
+        if os.path.isdir(FEVER_KB_DIR):
+            self.client = chromadb.PersistentClient(path=FEVER_KB_DIR)
+            self.collection = self.client.get_collection(FEVER_COLLECTION)
+            self.source = "fever"
+            print(f"Using FEVER knowledge base: {self.collection.count()} sentences.")
         else:
-            print("No documents found in knowledge base.")
+            self.client = chromadb.Client()
+            self.collection = self.client.get_or_create_collection("veritas_fallback_kb")
+            self.source = "fallback"
+            self._index_fallback_files()
 
-    def retrieve(self, query: str, top_k: int = 2,
-                 max_distance: float = MAX_EVIDENCE_DISTANCE) -> str:
-        """Retrieves the top-k most relevant evidence chunks for a query from ChromaDB.
+    def _index_fallback_files(self):
+        """Index the prototype's text files in memory (no FEVER KB built yet)."""
+        ids, chunks, metadatas = [], [], []
+        for filename in sorted(os.listdir(FALLBACK_DATA_DIR)):
+            if not filename.endswith(".txt"):
+                continue
+            with open(os.path.join(FALLBACK_DATA_DIR, filename), "r", encoding="utf-8") as f:
+                text = f.read()
+            page = filename[:-len(".txt")]
+            for i, chunk in enumerate(split_into_chunks(text, chunk_size=200, overlap=20)):
+                ids.append(f"{page}::chunk_{i}")
+                chunks.append(chunk)
+                metadatas.append({"page": page})
+        if chunks:
+            self.collection.add(
+                ids=ids,
+                documents=chunks,
+                embeddings=self.embedder.encode(chunks).tolist(),
+                metadatas=metadatas,
+            )
+        print(f"No FEVER knowledge base found; using fallback text files ({len(chunks)} chunks).")
 
-        Returns NO_EVIDENCE_MESSAGE when the knowledge base has nothing close
-        enough to the query, so a claim with no coverage is reported as
-        Not Enough Information instead of being matched to an unrelated chunk.
+    def retrieve(self, query: str, top_k: int = DEFAULT_TOP_K,
+                 max_distance: float = MAX_EVIDENCE_DISTANCE) -> List[EvidenceSpan]:
+        """Return up to top_k evidence spans for a query, closest first.
+
+        Spans farther than max_distance are dropped; an empty list means the
+        knowledge base has nothing relevant, so the claim is reported Not Enough
+        Information instead of being matched to an unrelated sentence.
         """
-        if not self.has_documents:
-            return NO_EVIDENCE_MESSAGE
+        if self.collection.count() == 0:
+            return []
 
-        # Encode query like in internship
-        query_embedding = self.embedder.encode(query).tolist()
-
-        # Query the collection
         results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k
+            query_embeddings=[self.embedder.encode(query).tolist()],
+            n_results=top_k,
         )
+        spans = []
+        for span_id, text, metadata, distance in zip(
+                results["ids"][0], results["documents"][0],
+                results["metadatas"][0], results["distances"][0]):
+            if distance <= max_distance:
+                spans.append(EvidenceSpan(
+                    span_id=span_id,
+                    page=metadata.get("title") or metadata.get("page", ""),
+                    text=text,
+                    distance=round(distance, 4),
+                ))
+        return spans
 
-        retrieved_documents = results['documents'][0]
-        distances = results['distances'][0]
-
-        # Nothing retrieved, or the closest chunk is still too far to be
-        # considered evidence for this claim.
-        if not retrieved_documents or distances[0] > max_distance:
-            return NO_EVIDENCE_MESSAGE
-
-        return "\n\n".join(retrieved_documents)
 
 retriever = EvidenceRetriever()

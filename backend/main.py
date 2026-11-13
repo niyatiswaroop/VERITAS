@@ -49,10 +49,10 @@ def verify_answer(request: VerificationRequest):
     # 2. For each claim, retrieve evidence and verify
     for claim in claims:
         # Retrieve evidence
-        evidence = retriever.retrieve(claim.text, top_k=2)
+        evidence = retriever.retrieve(claim.text)
         
         # Verify claim
-        verdict, probabilities, source = verifier.verify(claim.text, evidence)
+        verdict, probabilities, source, decisive_span_id = verifier.verify(claim.text, evidence)
         
         if verdict == "Supported":
             supported_count += 1
@@ -67,7 +67,8 @@ def verify_answer(request: VerificationRequest):
             verdict=verdict,
             evidence=evidence,
             nli_probabilities=probabilities,
-            verdict_source=source
+            verdict_source=source,
+            decisive_span_id=decisive_span_id
         ))
         
     total_claims = len(claims)

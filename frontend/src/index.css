@@ -211,6 +211,48 @@ body {
   border-left: 2px solid #475569;
 }
 
+.evidence-span + .evidence-span {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.evidence-source {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 2px;
+}
+
+.evidence-span.decisive {
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.decisive-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.3);
+  color: #e0e7ff;
+}
+
+.span-scores {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: #94a3b8;
+}
+
+.example-note {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.1);
+}
+
 .spinner {
   animation: spin 1s linear infinite;
 }

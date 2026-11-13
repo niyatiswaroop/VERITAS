@@ -11,8 +11,8 @@ ordered list of (claim_text, verdict) pairs.
   (via `demo_verdict`), before it ever touches the model.
 
 Real (non-demo) inputs fall through to the normal heuristic extractor + NLI path.
-Every fixture is backed by a matching file in `backend/data/` so the retrieved
-evidence shown in the UI is genuine.
+Every fixture topic has its Wikipedia page in the FEVER knowledge base (and a
+fallback file in `backend/data/`), so the retrieved evidence shown in the UI is genuine.
 """
 
 DEMO_EXAMPLES = [

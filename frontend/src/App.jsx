@@ -49,20 +49,91 @@ function App() {
     }
   };
 
+  // Examples drawn from the FEVER knowledge base (Phase 2, item 2.1). They run through the
+  // real pipeline (nothing pinned); `expected` is FEVER's gold label, `note` says how the
+  // current pipeline does on it, so wrong verdicts are visible rather than hidden.
   const examples = [
     {
-      label: 'Eiffel Tower',
+      label: 'Chile',
+      text: 'Chile is in South America.',
+      expected: 'Supported',
+      note: 'Currently correct.',
+    },
+    {
+      label: 'Starrcade',
+      text: 'Starrcade was an annual professional wrestling event.',
+      expected: 'Supported',
+      note: 'Currently correct.',
+    },
+    {
+      label: 'Bermuda Triangle',
+      text: 'Bermuda Triangle is a loosely-defined region in the Pacific Ocean.',
+      expected: 'Refuted',
+      note: 'Currently correct (the evidence says Atlantic).',
+    },
+    {
+      label: 'Buffy Summers',
+      text: 'Buffy Summers appears only in a television series.',
+      expected: 'Refuted',
+      note: 'Currently correct.',
+    },
+    {
+      label: 'Omar Khadr',
+      text: 'Omar Khadr was interrogated by llamas.',
+      expected: 'Not Enough Information',
+      note: 'Currently correct (no relevant evidence retrieved).',
+    },
+    {
+      label: 'Aarhus',
+      text: 'Aarhus is the second-largest city in Germany.',
+      expected: 'Refuted',
+      note: 'Currently correct (fixed by scoring each sentence separately).',
+    },
+    {
+      label: 'DJ Quik',
+      text: 'DJ Quik is from the United States.',
+      expected: 'Not Enough Information',
+      note: 'Known failure: comes out Refuted, decided by a sentence about a different person. Target of 2.2 (relevance check).',
+    },
+    {
+      label: 'Janelle Monáe',
+      text: "Janelle Monáe's dog's name is Charles Barkley.",
+      expected: 'Not Enough Information',
+      note: 'Known failure: "not mentioned" is read as a contradiction (Refuted). Target of 2.2 (thresholds).',
+    },
+    {
+      label: 'Polynesian languages',
+      text: 'Polynesian languages include several speakers.',
+      expected: 'Not Enough Information',
+      note: 'Known failure: comes out Supported. Target of 2.2.',
+    },
+    {
+      label: 'Statue of Liberty (2 claims)',
+      text: 'The Statue of Liberty was a gift from France. It is made of copper.',
+      expected: 'Not a FEVER claim (both facts are true)',
+      note: 'Known failures: claim 1 comes out Refuted, because the evidence sentence says "The copper statue…" without naming it, so the model cannot link it; claim 2 ("It is made of copper") has no subject and is matched to an unrelated sentence. Targets of 2.2 (page title on evidence) and 2.3 (Stage 1 pronoun rewriting).',
+    },
+    // Mid-eval demo answers (report §5.1): verdicts are pinned in the backend, the model is not run.
+    {
+      label: 'Eiffel Tower (pinned demo)',
       text: 'The Eiffel Tower was designed by Gustave Eiffel, completed in 1889, and is located in London.',
+      expected: 'Pinned demo verdicts',
+      note: 'Mid-eval demo (report §5.1): verdicts are fixed in the backend; the NLI model is not run.',
     },
     {
-      label: 'Great Wall',
+      label: 'Great Wall (pinned demo)',
       text: 'The Great Wall of China was built as protection against nomadic groups from the north. Most of the surviving wall was constructed during the Ming dynasty. Contrary to popular belief, the Great Wall cannot be seen from the Moon with the naked eye.',
+      expected: 'Pinned demo verdicts',
+      note: 'Mid-eval demo (report §5.1): verdicts are fixed in the backend; the NLI model is not run.',
     },
     {
-      label: 'Statue of Liberty',
+      label: 'Statue of Liberty (pinned demo)',
       text: 'The Statue of Liberty stands on Liberty Island in New York Harbor. It was a gift from the people of France and was dedicated in 1886. The statue is made of solid gold, and it is the most visited monument in the United States.',
+      expected: 'Pinned demo verdicts',
+      note: 'Mid-eval demo (report §5.1): verdicts are fixed in the backend; the NLI model is not run.',
     },
   ];
+  const selectedExample = examples.find((ex) => ex.text === answer);
 
   return (
     <div className="fade-in">
@@ -86,7 +157,7 @@ function App() {
                   onClick={() => setAnswer(ex.text)}
                   style={{ background: 'transparent', border: '1px solid #475569', color: '#cbd5e1', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
                 >
-                  {ex.label} (demo)
+                  {ex.label}
                 </button>
               ))}
             </div>
@@ -99,6 +170,11 @@ function App() {
               Verify Claims
             </button>
           </div>
+          {selectedExample && (
+            <div className="example-note">
+              <strong>FEVER label:</strong> {selectedExample.expected} · {selectedExample.note}
+            </div>
+          )}
           {error && <p style={{ color: '#ef4444', marginTop: '8px' }}>{error}</p>}
         </div>
       </div>
@@ -153,11 +229,29 @@ function App() {
                   <div style={{ marginTop: '16px' }}>
                     <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Retrieved Evidence</div>
                     <div className="evidence-box">
-                      {claim.evidence || "No relevant evidence found in the knowledge base."}
+                      {claim.evidence.length === 0
+                        ? "No relevant evidence found in the knowledge base."
+                        : claim.evidence.map((span) => (
+                          <div
+                            key={span.span_id}
+                            className={`evidence-span ${span.span_id === claim.decisive_span_id ? 'decisive' : ''}`}
+                          >
+                            <div className="evidence-source">
+                              {span.page} · <code>{span.span_id}</code>
+                              {span.span_id === claim.decisive_span_id && <span className="decisive-tag">decided the verdict</span>}
+                            </div>
+                            <div>{span.text}</div>
+                            {span.nli_probabilities && (
+                              <div className="span-scores">
+                                E {span.nli_probabilities.entailment.toFixed(3)} · C {span.nli_probabilities.contradiction.toFixed(3)} · N {span.nli_probabilities.neutral.toFixed(3)}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                     </div>
                     {claim.nli_probabilities && (
                       <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#94a3b8', fontFamily: 'monospace' }}>
-                        NLI: Entailment {claim.nli_probabilities.entailment.toFixed(3)} · Contradiction {claim.nli_probabilities.contradiction.toFixed(3)} · Neutral {claim.nli_probabilities.neutral.toFixed(3)}
+                        NLI ({claim.decisive_span_id ? 'deciding sentence' : 'closest sentence'}): Entailment {claim.nli_probabilities.entailment.toFixed(3)} · Contradiction {claim.nli_probabilities.contradiction.toFixed(3)} · Neutral {claim.nli_probabilities.neutral.toFixed(3)}
                       </div>
                     )}
                   </div>
