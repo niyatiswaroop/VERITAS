@@ -93,25 +93,31 @@ function App() {
       label: 'DJ Quik',
       text: 'DJ Quik is from the United States.',
       expected: 'Not Enough Information',
-      note: 'Known failure: comes out Refuted, decided by a sentence about a different person. Target of 2.2 (relevance check).',
+      note: 'Currently correct (fixed by the relevance check: a sentence about a different person can no longer decide).',
     },
     {
       label: 'Janelle Monáe',
       text: "Janelle Monáe's dog's name is Charles Barkley.",
       expected: 'Not Enough Information',
-      note: 'Known failure: "not mentioned" is read as a contradiction (Refuted). Target of 2.2 (thresholds).',
+      note: 'Known failure: "not mentioned" is still read as a contradiction (Refuted). Small-model limitation; larger NLI model under test.',
     },
     {
       label: 'Polynesian languages',
       text: 'Polynesian languages include several speakers.',
       expected: 'Not Enough Information',
-      note: 'Known failure: comes out Supported. Target of 2.2.',
+      note: 'Currently correct (fixed by the tuned thresholds).',
     },
     {
       label: 'Statue of Liberty (2 claims)',
       text: 'The Statue of Liberty was a gift from France. It is made of copper.',
       expected: 'Not a FEVER claim (both facts are true)',
-      note: 'Known failures: claim 1 comes out Refuted, because the evidence sentence says "The copper statue…" without naming it, so the model cannot link it; claim 2 ("It is made of copper") has no subject and is matched to an unrelated sentence. Targets of 2.2 (page title on evidence) and 2.3 (Stage 1 pronoun rewriting).',
+      note: 'Currently correct: Stage 1 rewrites "It is made of copper" as "The Statue of Liberty is made of copper", and the page title lets the model link "The copper statue" to the claim.',
+    },
+    {
+      label: 'Queen (band)',
+      text: 'Queen is a British rock band. They formed in London in 1970.',
+      expected: 'Both facts are true (FEVER: Supported)',
+      note: 'Known failure: claim 2 comes out Refuted because another Queen sentence ("first charted in 1974") is misread as a contradiction, and the report rule checks contradictions first (rule A vs B question for the mentor).',
     },
     // Mid-eval demo answers (report §5.1): verdicts are pinned in the backend, the model is not run.
     {
@@ -205,7 +211,16 @@ function App() {
           </div>
 
           <div className="glass-panel" style={{ marginTop: '12px' }}>
-            <h2 style={{ borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' }}>Claim-Level Breakdown</h2>
+            <h2 style={{ borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' }}>
+              Claim-Level Breakdown
+              <span className="source-tag" style={{ marginLeft: '12px', verticalAlign: 'middle' }}>
+                {{
+                  llm: 'Claims split by LLM (Stage 1)',
+                  regex_fallback: 'Claims split by sentence (no LLM key set)',
+                  pinned_demo: 'Pinned demo claims',
+                }[results.claim_extractor]}
+              </span>
+            </h2>
             <div className="claims-list">
               {results.claims_verified.map((claim, idx) => (
                 <div key={idx} className={`glass-panel claim-item ${VERDICT_CLASS[claim.verdict]}`}>

@@ -39,7 +39,7 @@ def verify_answer(request: VerificationRequest):
     answer = validate_answer(request.generated_answer)
 
     # 1. Extract Claims
-    claims = extractor.extract_claims(answer)
+    claims, claim_extractor = extractor.extract_claims(answer)
     
     verified_claims = []
     supported_count = 0
@@ -100,7 +100,8 @@ def verify_answer(request: VerificationRequest):
         claims_verified=verified_claims,
         hallucination_score=round(hallucination_score, 2),
         faithfulness_score=round(faithfulness_score, 2),
-        overall_classification=overall_class
+        overall_classification=overall_class,
+        claim_extractor=claim_extractor
     )
 
 if __name__ == "__main__":

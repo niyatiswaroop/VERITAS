@@ -31,6 +31,8 @@ class EvidenceSpan(BaseModel):
     distance: float
     # This sentence's own NLI scores against the claim; None when the model did not run.
     nli_probabilities: Optional[NLIProbabilities] = None
+    # Whether the sentence is about the claim's subject (only relevant sentences may decide).
+    relevant: Optional[bool] = None
 
 class VerificationResult(BaseModel):
     claim_id: str
@@ -49,3 +51,5 @@ class VerificationResponse(BaseModel):
     hallucination_score: float
     faithfulness_score: float
     overall_classification: str
+    # How Stage 1 split the answer: "llm", "regex_fallback" or "pinned_demo".
+    claim_extractor: str

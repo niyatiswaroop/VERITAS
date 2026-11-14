@@ -19,9 +19,9 @@ DEFAULT_TOP_K = 5
 # Max distance (Chroma's default squared L2 on MiniLM's unit-length embeddings) for a
 # sentence to count as relevant evidence. Farther sentences are treated as "not about the
 # claim", so the claim is reported Not Enough Information rather than being force-matched
-# to whatever is closest. Calibrated on the prototype's text files; to be recalibrated on
-# FEVER using scripts/eval_retrieval.py.
-MAX_EVIDENCE_DISTANCE = 1.0
+# to whatever is closest. Tuned on the FEVER dev split together with the Stage 4 thresholds
+# (scripts/eval_aggregation.py); was 1.0, hand-set on the prototype's text files.
+MAX_EVIDENCE_DISTANCE = 1.2
 
 
 def split_into_chunks(text, chunk_size=500, overlap=50):
@@ -38,10 +38,10 @@ def split_into_chunks(text, chunk_size=500, overlap=50):
 
 
 class EvidenceRetriever:
-    def __init__(self):
+    def __init__(self, kb_dir: str = FEVER_KB_DIR):
         self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        if os.path.isdir(FEVER_KB_DIR):
-            self.client = chromadb.PersistentClient(path=FEVER_KB_DIR)
+        if os.path.isdir(kb_dir):
+            self.client = chromadb.PersistentClient(path=kb_dir)
             self.collection = self.client.get_collection(FEVER_COLLECTION)
             self.source = "fever"
             print(f"Using FEVER knowledge base: {self.collection.count()} sentences.")
